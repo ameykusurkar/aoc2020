@@ -14,10 +14,11 @@ def findn(entries, target, n):
             if match:
                 return (e, *match)
 
-entries = set(map(int, sys.stdin))
+if __name__ == "__main__":
+    entries = set(map(int, sys.stdin))
 
-a, b = findn(entries, 2020, 2)
-print(a * b)
+    a, b = findn(entries, 2020, 2)
+    print(a * b)
 
-a, b, c = findn(entries, 2020, 3)
-print(a * b * c)
+    a, b, c = findn(entries, 2020, 3)
+    print(a * b * c)
