@@ -2,11 +2,43 @@ import sys
 from itertools import product, count
 import numpy as np
 
-def build_seats(lines):
-    seats = []
-    for line in lines:
-        seats.append(list(line.strip()))
-    return np.array(seats)
+class Seats:
+    def __init__(self, grid):
+        self.seats = grid
+
+    @classmethod
+    def from_lines(cls, lines):
+        seats = []
+        for line in lines:
+            seats.append(list(line.strip()))
+        return cls(np.array(seats))
+
+    def stabilize(self, occupied_counter, crowded_count):
+        while True:
+            new_seats = step(self.seats, occupied_counter, crowded_count)
+            if np.all(new_seats == self.seats):
+                break
+            self.seats = new_seats
+
+    def occupied_count(self):
+        return np.sum(self.seats == "#")
+
+def step(seats, occupied_counter, crowded_count):
+    new_seats = np.full_like(seats, None)
+    for (j, i), seat in points(seats):
+        occupied_count = occupied_counter(seats, (i, j))
+        if seat == "L" and occupied_count == 0:
+            new_seats[j, i] = "#"
+        elif seat == "#" and occupied_count >= crowded_count:
+            new_seats[j, i] = "L"
+        else:
+            new_seats[j, i] = seat
+    return new_seats
+
+def points(grid):
+    for j in range(len(grid)):
+        for i in range(len(grid[0])):
+            yield (j, i), grid[j, i]
 
 def directions():
     return (
@@ -16,36 +48,6 @@ def directions():
     )
 
 DIRECTIONS = list(directions())
-
-def adjacents(grid, x, y):
-    """
-    >>> adjacents(np.arange(12).reshape(3, 4), 0, 0)
-    [1, 4, 5]
-    >>> adjacents(np.arange(12).reshape(3, 4), 2, 0)
-    [1, 3, 5, 6, 7]
-    >>> adjacents(np.arange(12).reshape(3, 4), 1, 1)
-    [0, 1, 2, 4, 6, 8, 9, 10]
-    """
-    max_x, max_y = len(grid[0]), len(grid)
-    indexes = sorted(
-        [y + dy, x + dx]
-        for dx, dy in DIRECTIONS
-        if 0 <= y + dy < max_y and 0 <= x + dx < max_x
-    )
-    return [grid[j, i] for j, i in indexes]
-
-def step(seats, occupied_counter, crowded_count):
-    new_seats = np.full_like(seats, None)
-    for j in range(len(seats)):
-        for i in range(len(seats[0])):
-            occupied_count = occupied_counter(seats, (i, j))
-            if seats[j, i] == "L" and occupied_count == 0:
-                new_seats[j, i] = "#"
-            elif seats[j, i] == "#" and occupied_count >= crowded_count:
-                new_seats[j, i] = "L"
-            else:
-                new_seats[j, i] = seats[j, i]
-    return new_seats
 
 def count_adjacent_occupied(seats, point):
     return [visible_seat(seats, point, d, depth=1) for d in DIRECTIONS].count("#")
@@ -66,21 +68,12 @@ def visible_seat(seats, point, direction, depth=None):
         elif seats[curr_y, curr_x] != ".":
             return seats[curr_y, curr_x]
 
-def stabilize(seats, occupied_counter, crowded_count):
-    while True:
-        new_seats = step(seats, occupied_counter, crowded_count)
-        if np.all(new_seats == seats):
-            break
-        seats = new_seats
-    return np.sum(seats == "#")
+lines = sys.stdin.readlines()
 
-import doctest
-doctest.testmod()
+seats = Seats.from_lines(lines)
+seats.stabilize(occupied_counter=count_adjacent_occupied, crowded_count=4)
+print(seats.occupied_count())
 
-seats = build_seats(sys.stdin.readlines())
-
-result = stabilize(seats, occupied_counter=count_adjacent_occupied, crowded_count=4)
-print(result)
-
-result = stabilize(seats, occupied_counter=count_visible_occupied, crowded_count=5)
-print(result)
+seats = Seats.from_lines(lines)
+seats.stabilize(occupied_counter=count_visible_occupied, crowded_count=5)
+print(seats.occupied_count())
