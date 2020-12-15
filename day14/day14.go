@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+type Memory map[int64]int64
+type memoryWriter func(memory Memory, addr int64, val int64, mask string)
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	var lines []string
@@ -15,19 +18,26 @@ func main() {
 		lines = append(lines, scanner.Text())
 	}
 
-	memory := make(map[int64]int64)
-	var mask *map[int]int
+	sum := execute(lines, memoryWriterPartOne)
+	fmt.Println(sum)
+
+	sum = execute(lines, memoryWriterPartTwo)
+	fmt.Println(sum)
+}
+
+func execute(lines []string, writer memoryWriter) int64 {
+	var mask_str string
+	memory := make(Memory)
 
 	for _, s := range lines {
 		if strings.Contains(s, "[") {
 			var addr, val int64
 			fmt.Sscanf(s, "mem[%d] = %d", &addr, &val)
-			if mask != nil {
-				val = applyMask(mask, val)
+			if mask_str != "" {
+				writer(memory, addr, val, mask_str)
 			}
-			memory[addr] = val
 		} else {
-			mask = makeMask(s[7:]) // First 7 chars are "mask = "
+			mask_str = s[7:] // First 7 chars are "mask = "
 		}
 	}
 
@@ -35,46 +45,13 @@ func main() {
 	for _, val := range memory {
 		sum += val
 	}
-	fmt.Println(sum)
-
-  var mask_str string
-	memory = make(map[int64]int64)
-
-	for _, s := range lines {
-		if strings.Contains(s, "[") {
-			var addr, val int64
-			fmt.Sscanf(s, "mem[%d] = %d", &addr, &val)
-			if mask_str != "" {
-        addrs := applyMask2(mask_str, addr)
-        for _, a := range addrs {
-          memory[a] = val
-          // fmt.Printf("mem[%d] = %d\n", a, val)
-        }
-			}
-		} else {
-			mask_str = s[7:] // First 7 chars are "mask = "
-		}
-	}
-
-  sum = int64(0)
-	for _, val := range memory {
-		sum += val
-	}
-	fmt.Println(sum)
+	return sum
 }
 
-func makeMask(s string) *map[int]int {
-	mask := make(map[int]int)
-	for i, char := range s {
-		if char != 'X' {
-			mask[i] = int(char - 48) // Convert ascii to int
-		}
-	}
-	return &mask
-}
+func memoryWriterPartOne(memory Memory, addr int64, val int64, mask string) {
+	mask_map := makeMaskMap(mask)
 
-func applyMask(mask *map[int]int, val int64) int64 {
-	for i, bit := range *mask {
+	for i, bit := range *mask_map {
 		index := 36 - i - 1 // MSB is on the left
 		if bit == 0 {
 			val &= ^(1 << index)
@@ -82,20 +59,34 @@ func applyMask(mask *map[int]int, val int64) int64 {
 			val |= 1 << index
 		}
 	}
-	return val
+
+	memory[addr] = val
 }
 
-func applyMask2(mask string, addr int64) []int64 {
+func memoryWriterPartTwo(memory Memory, addr int64, val int64, mask string) {
 	addrs := []int64{addr}
 	for i, bit := range mask {
-		index := 36 - i - 1
+		index := 36 - i - 1 // MSB is on the left
 		if bit == '1' {
 			addrs = applySet(index, addrs)
 		} else if bit == 'X' {
 			addrs = applyFloat(index, addrs)
 		}
 	}
-	return addrs
+
+	for _, a := range addrs {
+		memory[a] = val
+	}
+}
+
+func makeMaskMap(s string) *map[int]int {
+	mask := make(map[int]int)
+	for i, char := range s {
+		if char != 'X' {
+			mask[i] = int(char - 48) // Convert ascii to int
+		}
+	}
+	return &mask
 }
 
 func applyFloat(bit int, addrs []int64) []int64 {
