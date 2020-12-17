@@ -24,16 +24,17 @@ fn main() {
     let stdin = io::stdin();
     let mut handle = stdin.lock();
 
-    let rules = parse_while_rules(&mut handle);
+    let mut lines = (&mut handle).lines();
+    let rules = parse_while_rules(&mut lines);
 
-    (&mut handle).lines().next(); // Header for your ticket, ignore
+    lines.next(); // Header for your ticket, ignore
 
-    let your_ticket = parse_ticket(&(&mut handle).lines().next().unwrap().unwrap());
+    let your_ticket = parse_csv(&lines.next().expect("Should have more lines").unwrap());
 
-    (&mut handle).lines().next(); // Blank line, ignore
-    (&mut handle).lines().next(); // Header for nearby tickets, ignore
+    lines.next(); // Blank line, ignore
+    lines.next(); // Header for nearby tickets, ignore
 
-    let nearby_tickets: Vec<Ticket> = handle.lines().map(|l| parse_ticket(&l.unwrap())).collect();
+    let nearby_tickets: Vec<Ticket> = lines.map(|l| parse_csv(&l.unwrap())).collect();
 
     let mut valid_tickets = Vec::new();
     let mut invalid_total = 0;
@@ -72,9 +73,12 @@ fn main() {
     println!("{:?}", result);
 }
 
-fn parse_while_rules<R: BufRead>(reader: &mut R) -> Rules {
+fn parse_while_rules<I>(lines: &mut I) -> Rules
+where
+    I: Iterator<Item = std::io::Result<String>>,
+{
     let mut rules = HashMap::new();
-    for line in reader.lines() {
+    for line in lines {
         let line = line.unwrap();
 
         if line.is_empty() {
@@ -100,12 +104,10 @@ fn parse_while_rules<R: BufRead>(reader: &mut R) -> Rules {
     Rules(rules)
 }
 
-fn parse_ticket(line: &str) -> Ticket {
-    let mut vec = Vec::new();
-    for token in line.split(",") {
-        vec.push(token.parse().expect("Should be int"));
-    }
-    vec
+fn parse_csv(line: &str) -> Vec<u32> {
+    line.split(",")
+        .map(|token| token.parse().expect("Should be u32"))
+        .collect()
 }
 
 fn invalid_fields(rules: &Rules, ticket: &Ticket) -> Vec<u32> {
@@ -128,25 +130,24 @@ fn resolve_possibilities(choices: Vec<HashSet<String>>) -> Vec<String> {
             break;
         }
 
-        let solved_field_name = remaining_choices.iter().find(|field_choices| {
-            field_choices.len() == 1
-                && !resolved_names.contains(field_choices.iter().next().unwrap())
-        });
+        let solved_field = remaining_choices
+            .iter()
+            .enumerate()
+            .find(|(_i, field_choices)| {
+                field_choices.len() == 1
+                    && !resolved_names.contains(field_choices.iter().next().unwrap())
+            });
 
-        if solved_field_name.is_none() {
-            panic!("Cannot resolve!");
-        }
+        let (solved_idx, solved_name) = solved_field.expect("Should have a HashSet!");
+        let solved_name = solved_name.iter().next().unwrap().to_owned();
+        resolved_names.insert(solved_name.to_owned());
 
-        let solved_name = solved_field_name.unwrap().iter().next().unwrap().to_owned();
-
-        for field_choices in &mut remaining_choices {
-            field_choices.remove(&solved_name);
-
-            if field_choices.is_empty() {
-                // Put it back, as this is the right answer (hacky, I know)
-                field_choices.insert(solved_name.to_owned());
-                resolved_names.insert(solved_name.to_owned());
+        for (i, field_choices) in remaining_choices.iter_mut().enumerate() {
+            if i == solved_idx {
+                continue;
             }
+
+            field_choices.remove(&solved_name);
         }
     }
 
